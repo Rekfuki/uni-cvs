@@ -14,7 +14,7 @@ create_group () {
 }
 
 clean_up () {
-	GROUP_NAM=$2
+	GROUP_NAME=$2
 	DIR=./$REPOSITORIES/$1
 
 	echo "Reverting changes..."
