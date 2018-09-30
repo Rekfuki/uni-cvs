@@ -16,7 +16,7 @@ create_group () {
 clean_up () {
 	GROUP_NAM=$2
 	DIR=./$REPOSITORIES/$1
-	
+
 	echo "Reverting changes..."
 
 	#remove dir if exists
