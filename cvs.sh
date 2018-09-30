@@ -16,7 +16,7 @@ create_group () {
 clean_up () {
 	GROUP_NAME=$2
 	DIR=./$REPOSITORIES/$1
-	
+
 	#remove dir if exists
 	if [[ ! -z $1 && -d $DIR ]]; then
 		sudo rm -r $DIR && echo "Cleaning up repository directory" | 1>&2
