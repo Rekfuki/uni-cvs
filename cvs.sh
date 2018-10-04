@@ -1,5 +1,7 @@
 #! /bin/bash
 
+#set -euo pipefail
+
 REPOSITORIES=repositories
 ROOT_LOG=./$REPOSITORIES/logs.txt
 
@@ -349,17 +351,84 @@ if [[ "$1" == "-r" ]]; then
 						echo "Cannot checkout directories, must be a single file"
 						;;
 					*)
-		#				if [[ -f ./$REPOSITORIES/$2/$4 ]]; then
-		#											
-		#				fi
+						if [[ -f ./$REPOSITORIES/$2/$4 ]]; then
+							DIR=./$REPOSITORIES/$2
+							
+							if [[ -f $DIR/$4.lck  ]]; then
+								echo "File is currently being edited by $(grep . $DIR/$4.lck)"
+								exit 1
+							fi
+
+							#TODO crete backup
+
+							if [[ ! -d $DIR/.lit/$USER ]]; then mkdir $DIR/.lit/$USER; fi
+							
+							#creating a lock file and writing the user who is editing the file
+							#in order to prevent other users from editing the file
+							echo "$USER" > $DIR/$4.lck
+							
+							BASE="$(dirname $4)"
+							if [[ ! -z "$BASE" ]]; then		
+								if [[ "$BASE" != "." ]]; then
+									mkdir -p "$DIR/.lit/$USER/$BASE" || exit 1
+								else
+									BASE=""
+								fi
+							fi
+							
+							#FILE="$(basename $4)"
+							cp "$DIR/$4" "$DIR/.lit/$USER/$4" || (2>&1; exit 1)
+							
+							echo "File $4 checked-out"
+							echo "$(log_message "File $4 has been checked-out by user $USER")" >> $REPO_LOG
+							
+						else 
+							echo "File $4 does not exist"
+						fi
+
+						exit 1
 						;;
 					esac
 				else 
-					echo "Please provide file name"
+					echo "Please provide a file to check-out"
 				fi
 				;;
-			#TODO add further support
 			"-check-in")
+				DIR=./$REPOSITORIES/$2
+				if [[ ! -z $4 ]]; then
+					case $4 in 
+					*/)
+						echo "Cannot check-out whole dir have to check-out file by file"; exit 1
+						;;
+					*)
+						COMMIT_MSG="not provided"
+						if [[ ! -z $5 ]]; then
+							if [[ "$5" != "-m" ]]; then echo "unsupported flag $5" &&  exit 1; fi
+							 COMMIT_MSG="$6"
+						fi
+						if [[ ! -f $DIR/.lit/$USER/$4  ]]; then
+							echo "File $4 not checked-out"
+							echo "Make sure you provide the full path starting from repo root"
+							exit 1
+						fi
+
+						mv $DIR/.lit/$USER/$4 $DIR/ && rm $DIR/$4.lck || (2>&1; exit 1)
+					 
+						echo "$(log_message "File $4 has been checked-in by $USER")" >> $REPO_LOG
+						if [[ ! -z $COMMIT_MSG ]]; then
+							echo "Commit note: $COMMIT_MSG" >> $REPO_LOG
+						fi
+						echo "Successfully checked-in file $4"
+						;;
+					esac
+				else
+					echo "Please provide a file to check-in"
+				fi
+			
+				exit 1
+				;;
+			"-editing")
+				find "./$REPOSITORIES/$2/.lit/$USER/" -type f | cut -sd / -f 6- | grep . 
 				;;
 			"-logs")
 				cat $REPO_LOG
