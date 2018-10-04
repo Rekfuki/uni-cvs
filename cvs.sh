@@ -1,6 +1,7 @@
 #! /bin/bash
 
 REPOSITORIES=repositories
+ROOT_LOG=./$REPOSITORIES/logs.txt
 
 create_group () {
 	GROUP_NAME=$1
@@ -39,19 +40,13 @@ if [ $# -eq 0 ]; then
 	exit 1	
 fi
 
-#use to activate addded group to the user without 
-activate_group () {
-	(	
-		if exec sg $1 newgrp `id -gn`; then
-			return 0
-		else
-			1>&2
-		fi
-		return 1
-	)
+
+#used to format log message
+log_message () {
+	for var in "$@"; do
+		echo "$(date -u): $var"
+	done
 }
-
-
 
 #initializing a new repository
 #new reposiotry can only be created by a sys-admin due to group and user managment in unix
@@ -59,24 +54,26 @@ if [[ $1 == "-init" ]]; then
 
 	#check if owner is specified, otherwise set current $USER as owner
 	OWNER=$USER
-	case $3 in
-	"-o" | "-owner")
-		if [[ ! -z $4 ]]; then
-			if getent passwd $4 > /dev/null 2>&1; then
-				OWNER=$4
+	if [[ ! -z $3  ]]; then
+		case $3 in
+		"-o" | "-owner")
+			if [[ ! -z $4 ]]; then
+				if getent passwd $4 > /dev/null 2>&1; then
+					OWNER=$4
+				else
+					echo "User $4 does not exist, aborting"
+					exit 1
+				fi
 			else
-				echo "User $4 does not exist, aborting"
+				echo -e "\nflag -owner requires owner name, ex: -init <repo_name> -owner <user>"
 				exit 1
 			fi
-		else
-			echo -e "\nflag -owner requires owner name, ex: -init <repo_name> -owner <user>"
-			exit 1
-		fi
-		;;
-	*)
-		echo "Unsupported flag $3, display help"
-		exit 1;
-	esac
+			;;
+		*)
+			echo "Unsupported flag $3, display help"
+			exit 1;
+		esac
+	fi
 
 	REPO_NAME=$2
 	#check if repo name is provided
@@ -90,7 +87,16 @@ if [[ $1 == "-init" ]]; then
 	#repositories folder will house all the repositories
 	if [ ! -d "repositories" ]; then
 		echo "repositories directory not found, intializing"
-		sudo mkdir $REPOSITORIES && echo "dir: $REPOSITORIES created" || (1>&2; clean_up $REPO_NAME; echo -e "\nAborting"; exit 1)
+		if sudo mkdir $REPOSITORIES; then
+			echo "dir: $REPOSITORIES created"
+			sudo touch $ROOT_LOG
+			sudo chmod 777 $ROOT_LOG
+		else 
+			1>&2 
+			clean_up $REPO_NAME
+			echo -e "\nAborting"
+			exit 1
+		fi
 	fi		
 	
 	if [ ! -e $REPOSITORIES/$REPO_NAME ]; then 
@@ -118,6 +124,9 @@ if [[ $1 == "-init" ]]; then
 
 			#give the group rwx perms
 			if sudo chmod g+rwx ./$REPOSITORIES/$REPO_NAME; then 
+				#ensures that new files in the repository will belong to its parent group
+				sudo chmod g+s ./$REPOSITORIES/$REPO_NAME
+
 				echo "Group $GROUP_NAME now has rwx permissions"
 			else 
 				1>&2; clean_up $REPO_NAME $GROUP_NAME; echo "Aborting"
@@ -126,28 +135,26 @@ if [[ $1 == "-init" ]]; then
 			echo -e "\nAdding owner $OWNER to the group $GROUP_NAME"
 			sudo usermod -a -G $GROUP_NAME $OWNER && echo -e "Successfully added" || (1>&2; clean_up $REPO_NAME $GROUP_NAME; exit 1)
 
-			#in order for groups to take effect user normally has to relog
-			#however, im using a little hack
-		#	echo "Activating  group $GROUP_NAME"
-		#	if $(activate_group $GROUP_NAME); then 
-		#		clean_up $REPO_NAME $GROUP_NAME && echo "Aborting"
-		#		exit 1
-		#	fi
-		#
-		#	echo -e "\nGroup has been activated"
-				
 			echo -e "\nPlease re-log or spawn a new instance of shell in order for groups to take effect"
 
 		else
-			echo "Failed to assign repository: $REPO_NAME to the group: $GROUP_NAME. Aborting"
+			echo "Failed to assign repository: $REPO_NAME to the group: $GROUP_NAME"
+			clean_up $REPO_NAME $GROUP_NAME
 			exit 1
 		fi
-			
+
+
+		#creating folder to store history, backups  and user checked-out files
+		mkdir ./$REPOSITORIES/$REPO_NAME/.lit
+		touch ./$REPOSITORIES/$REPO_NAME/.lit/logs.txt
+		echo "$(log_message "Repo was created by $USER" "Owner of the group $OWNER")" >> ./$REPOSITORIES/$REPO_NAME/.lit/logs.txt
 	else 
 		echo "Repository $REPO_NAME already exists"
 		exit 1
 	fi
+	echo "$(log_message "Repo $REPO_NAME created by $USER")" >> $ROOT_LOG
 	echo "Done"
+	
 	exit 1
 fi
 
@@ -163,7 +170,7 @@ remove_repo () {
 	echo -e "\nRemoving repository: $DIR" 
 	sudo rm -r $DIR && echo "Removed" || (1>&2; exit 1) 
 
-	echo
+	echo "$(log_message "Repo $DIR was deleted by $USER")" >> $ROOT_LOG
 }
 
 
@@ -176,6 +183,7 @@ if [[ $1 == "-delete-all" ]]; then
 
 	if [[ ! $REPLY = ^[Yy]$ ]]; then
 		for DIR in ./$REPOSITORIES/*; do
+			[[ -d "$DIR" ]] || continue
 			remove_repo $DIR
 		done
 		echo "Done"
@@ -183,10 +191,18 @@ if [[ $1 == "-delete-all" ]]; then
 		echo "Aborting"
 	fi
 
-exit 1
-
+	
+	exit 1
 fi
 
+if [[ $1 == "-logs" ]];  then
+	if [[ -f $ROOT_LOG ]]; then
+		cat $ROOT_LOG
+	else
+		echo "Nothing is in the logs"
+	fi
+	exit 1
+fi
 #checks if the repository exists
 can_access_repo () {	
 	if [[ -d ./$REPOSITORIES/$1 ]]; then 	
@@ -196,12 +212,19 @@ can_access_repo () {
 			return
 		else 
 			echo "You don't have access rights to the repository"
+			echo "$(log_message "Access denied to user $USER")" >> ./$REPOSITORIES/$1/.lit/logs.txt
 		fi
 	else 
 		echo "Repository $1 does not exist"
 	fi
 }
 
+#create_backup () {
+#	FILE_PATH="$1/"
+#	BAK_PATH="./$REPOSITORIES/$FILE_PATH"
+#	if [[   ]]
+#	mkdir -p $FILE_PATH
+#}
 
 #functions available to each repository
 if [[ "$1" == "-r" ]]; then
@@ -209,6 +232,7 @@ if [[ "$1" == "-r" ]]; then
 		ACCESS=$(can_access_repo $2)
 		if  [[ "$ACCESS" == "y" ]]; then 
 			GROUP_NAME=$(stat -c %G ./$REPOSITORIES/$2)
+			REPO_LOG=./$REPOSITORIES/$2/.lit/logs.txt
 			case $3 in
 			"-d" | "-delete")
 				if [[ $EUID -eq 0 || $(stat -c %U ./$REPOSITORIES/$2) == $USER ]]; then
@@ -217,19 +241,29 @@ if [[ "$1" == "-r" ]]; then
 
 					if [[ ! $REPLY = ^[Yy]$ ]]; then
 						remove_repo ./$REPOSITORIES/$2
+						echo "$(log_message "User $USER removed repo $2")" >> $ROOT_LOG
 						echo "Done"
 					else 
 						echo "Aborting"
 					fi	
 				else
 					echo -e "\nYou don't have the rights to remove this repository"
+					echo "$(log_message "User $USER tried to remove repo $2")" >> $ROOT_LOG
 				fi
 
 				;;
 			"-add-user")
 				if getent passwd $4 > /dev/null 2>&1; then			
 					if ! id -Gn $4 | grep -c $GROUP_NAME > /dev/null; then
-						sudo usermod -a -G $GROUP_NAME $4 && echo "Added user $4 to group $GROUP_NAME" || (1>&2; echo "failed"; exit 1)
+						if sudo usermod -a -G $GROUP_NAME $4; then
+							echo "Added user $4 to repo $2. User $4 needs to relog in order to gain access"
+							echo "$(log_message "User $USER added user $4 to the repo")" >> $REPO_LOG
+							exit 1
+						else
+							echo "$log_message "Failed to add user $4 to repo"" >> $REPO_LOG
+							1>&2; echo "failed"; exit 1
+						fi
+			
 					else 
 						echo "User $4 is already added to the repository $2"
 					fi
@@ -239,15 +273,97 @@ if [[ "$1" == "-r" ]]; then
 				;;
 			"-remove-user")
 				if id -Gn $4 | grep -c $GROUP_NAME > /dev/null; then
-					sudo deluser $4 $GROUP_NAME && echo "Removed user $4 from repo $2" || (1>&2; echo "Aborting"; exit 1)
+					if sudo deluser $4 $GROUP_NAME; then
+						echo "Removed user $4 from repo $2"
+						echo "$(log_message "User $USER removed user $4 from repo $2")" >> $REPO_LOG
+					else
+						echo "$(log_message "Failed to remove user $4 from repo $2")" >> $REPO_LOG
+						(1>&2; echo "Aborting"; exit 1)
+					fi
 				else 
 					echo "User $4 does not belong to the group $GROUP_NAME";
 				fi
 				;;
 			"-l" | "-list")
-				
+					echo -e  "Files available in repository $2:\n"
+					find ./$REPOSITORIES/$2/* | cut -sd / -f 3- | sed -e "s/[^-][^\/]*\// |/g" -e "s/|\([^ ]\)/|-\1/"
+				;;
+			"-add-file")
+				if [[ ! -z $4  ]]; then
+					case "$4" in 
+					*/)
+						echo "No file provided (cannot be an empty directory)" && exit 1		
+						;;
+					*)
+						DIR=./$REPOSITORIES/$2						
+						FILE_DIR=$(dirname "$4")
+
+						if [[ "$FILE_DIR" != "." ]]; then DIR=$DIR/$FILE_DIR; fi
+
+						FILE=$(basename "$4")
+
+						if [[ ! -f $DIR/$FILE ]]; then
+							mkdir -p $DIR
+							touch $DIR/$FILE
+							echo "$(log_message "File $DIR/$FILE has been created by $USER")" >> $REPO_LOG
+							echo "FILE $DIR/$FILE has been created" && exit 1
+							
+						else 
+							echo "FILE $DIR/$FILE already exists" && exit 1
+						fi
+						;;
+					esac
+				else 
+					echo "Please provide file name"
+				fi
+				;;
+			"-remove-file")
+				if [[ ! -z $4 ]]; then
+					case "$4" in
+					*/)
+						echo "Cannot remove dir, please remove all the files from the dir first" && exit 1	
+						;;
+					*)
+						DIR=./$REPOSITORIES/$2/$4
+
+						if [[ -e $DIR ]]; then
+							if rm $DIR; then
+								echo "FILE $DIR has been removed"
+								echo "$(log_message "FILE $DIR has been removed by $USER")" >> $REPO_LOG
+								find ./$REPOSITORIES/$2/* -type d -empty -delete || 2>&1
+							else
+								echo -e "Failed to remove file"; 2>&1
+							fi
+						else
+							echo "FILE $DIR does not exist" && exit 1
+						fi
+					esac
+				else 
+					echo "Please provide file name"
+				fi
+				;;
+			"-check-out")
+				if [[ ! -z $4 ]]; then
+					case $4 in
+					*/)
+						echo "Cannot checkout directories, must be a single file"
+						;;
+					*)
+		#				if [[ -f ./$REPOSITORIES/$2/$4 ]]; then
+		#											
+		#				fi
+						;;
+					esac
+				else 
+					echo "Please provide file name"
+				fi
 				;;
 			#TODO add further support
+			"-check-in")
+				;;
+			"-logs")
+				cat $REPO_LOG
+				;;
 			*)
 				echo "show help"
 				;;
@@ -260,4 +376,4 @@ if [[ "$1" == "-r" ]]; then
 	fi
 
 	exit 1
-fi
+fi		
