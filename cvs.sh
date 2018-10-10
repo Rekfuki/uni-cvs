@@ -128,6 +128,38 @@ list_available_repos () {
 	echo -e "\\nIf you don't see any repositories, you might need to relog in order for groups to take an effect"
 }
 
+print_help () {
+	normal="\033[0m"
+	bold="\033[1m"
+	dim="\033[2m"
+	italic="\033[3m"
+	underlined="\033[4m"
+
+	echo -e "\n${bold}HELP:${normal}\n"
+	echo -e "${bold}cvs -init ${italic}repo_name${normal}${dim} -owner ${italic}user ${normal}: intialize repository"
+	echo -e "${bold}cvs -list ${normal}: list available repositories"
+	echo -e "${bold}cvs -delete-all ${normal}: delete all repositories"
+	echo -e "${bold}cvs -logs ${normal}: display logs"
+	echo -e "${bold}cvs -r/-repo ${italic}repo_name${normal}${bold} ${underlined}[OPTIONS]${normal} : perform actions on a repository"
+
+	echo -e "\n${bold}OPTIONS:${normal}\n"
+	echo -e "${bold}-d/-delete${normal} : delete repository"
+	echo -e "${bold}-l/-list${normal} : list repository files"
+	echo -e "${bold}-editing${normal} : list editing files"
+	echo -e "${bold}-logs${normal} : display repository log"
+	echo -e "${bold}-zip${normal} : compress repository and place it in \$HOME"
+	echo -e "${bold}-add-user ${italic}user${normal} : add user to repository"
+	echo -e "${bold}-remove-user ${italic}user${normal} : remove user from repository"
+	echo -e "${bold}-add-file ${italic}file${normal} : add file to repository"
+	echo -e "${bold}-remove-file ${italic}file${normal} : remove file from repository"
+	echo -e "${bold}-check-out ${italic}file${normal} : check-out file from repository"
+	echo -e "${bold}-check-in ${italic}file${normal} : check-in file to repository"
+	echo -e "${bold}-restore ${italic}backup${normal} : restore state from backup"
+	echo -e "${bold}-edit ${italic}file${normal} : edit checked-out file"
+	echo -e "${bold}-view ${italic}file${normal} : view file contents"
+	echo ""
+}
+
 case "$1" in
 "-init")
 
@@ -271,6 +303,9 @@ case "$1" in
 		echo "Nothing is in the logs"
 	fi
 	exit 1
+	;;
+"-help")
+	print_help
 	;;
 "-r" | "-repo")
 	if [[ -n $2 ]]; then
@@ -567,35 +602,7 @@ case "$1" in
 	exit 1
 	;;
 *)
-	normal="\033[0m"
-	bold="\033[1m"
-	dim="\033[2m"
-	italic="\033[3m"
-	underlined="\033[4m"
-
-	echo -e "\n${bold}HELP:${normal}\n"
-	echo -e "${bold}cvs -init ${italic}repo_name${normal}${dim} -owner ${italic}user ${normal}: intialize repository"
-	echo -e "${bold}cvs -list ${normal}: list available repositories"
-	echo -e "${bold}cvs -delete-all ${normal}: delete all repositories"
-	echo -e "${bold}cvs -logs ${normal}: display logs"
-	echo -e "${bold}cvs -r/-repo ${italic}repo_name${normal}${bold} ${underlined}[OPTIONS]${normal} : perform actions on a repository"
-
-	echo -e "\n${bold}OPTIONS:${normal}\n"
-	echo -e "${bold}-d/-delete${normal} : delete repository"
-	echo -e "${bold}-l/-list${normal} : list repository files"
-	echo -e "${bold}-editing${normal} : list editing files"
-	echo -e "${bold}-logs${normal} : display repository log"
-	echo -e "${bold}-zip${normal} : compress repository and place it in \$HOME"
-	echo -e "${bold}-add-user ${italic}user${normal} : add user to repository"
-	echo -e "${bold}-remove-user ${italic}user${normal} : remove user from repository"
-	echo -e "${bold}-add-file ${italic}file${normal} : add file to repository"
-	echo -e "${bold}-remove-file ${italic}file${normal} : remove file from repository"
-	echo -e "${bold}-check-out ${italic}file${normal} : check-out file from repository"
-	echo -e "${bold}-check-in ${italic}file${normal} : check-in file to repository"
-	echo -e "${bold}-restore ${italic}backup${normal} : restore state from backup"
-	echo -e "${bold}-edit ${italic}file${normal} : edit checked-out file"
-	echo -e "${bold}-view ${italic}file${normal} : view file contents"
-	echo ""
+	print_help
 	
 	exit 1	
 	;;
