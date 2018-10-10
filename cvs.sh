@@ -89,7 +89,7 @@ list_repo_files () {
 
 list_backups () {
 	echo -e "\\nAvailable backups for rollback:"
-	find ./"$REPOSITORIES"/"$1"/.lit/backups/* -type f | cut -sd / -f 6- 
+	find ./"$REPOSITORIES"/"$1"/.lit/backups/ -type f | cut -sd / -f 6- 
 }
 
 list_editing_files () {
@@ -116,7 +116,7 @@ can_access_repo () {
 
 list_available_repos () {
 	echo -e "\\nHere is a list of repositories you have access to:"
-	for dir in ./"$REPOSITORIES"/*/; do
+	for dir in ./"$REPOSITORIES"/; do
 		GROUP_NAME=$(stat -c %G "$dir")
 		if  [[ "$EUID" -eq 0 ]] || \
 		    [[ "$(stat -c %U "$dir")" == "$USER" ]] || \
@@ -181,7 +181,7 @@ case "$1" in
 			fi
 			;;
 		*)
-			echo "Unsupported flag $3, display help"
+			print_help
 			exit 1;
 		esac
 	fi
@@ -283,14 +283,14 @@ case "$1" in
 	echo 
 
 
-	if [[ ! $REPLY = ^[Yy]$ ]]; then
+	if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+		echo "Aborting"
+	else
 		for DIR in ./"$REPOSITORIES"/*; do
 			[[ -d "$DIR" ]] || continue
 			remove_repo "$DIR"
 		done
 		echo "Done"
-	else
-		echo "Aborting"
 	fi
 
 	
@@ -319,12 +319,12 @@ case "$1" in
 					read -p "Are you sure you want to delete repository $2 (y/n)?" -n 1 -r
 					echo 
 
-					if [[ ! $REPLY = ^[Yy]$ ]]; then
+					if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+						echo "Aborting"
+					else 
 						remove_repo "./$REPOSITORIES/$2"
 						log_message "User $USER removed repo $2" >> "$ROOT_LOG"
 						echo "Done"
-					else 
-						echo "Aborting"
 					fi	
 				else
 					echo -e "\\nYou don't have the rights to remove this repository"
@@ -504,12 +504,17 @@ case "$1" in
 							exit 1
 						fi
 
+						DF="$(diff -u "$DIR/.lit/$USER/$4" "$DIR/$4")"				
+	
 						mv "$DIR/.lit/$USER/$4" "$DIR/$4" && rm "$DIR/$4.lck" || exit 1
 					 
 						log_message "File $4 has been checked-in by $USER" >> "$REPO_LOG"
 						if [[ -n $COMMIT_MSG ]]; then
 							echo "Commit note: $COMMIT_MSG" >> "$REPO_LOG"
 						fi
+						echo -e  "\\nChanges made: \\n" >> "$REPO_LOG"
+						echo "$DF" >> "$REPO_LOG"
+						echo -e "\\n\\n" >> "$REPO_LOG"
 						echo "Successfully checked-in file $4"
 						;;
 					esac
@@ -589,14 +594,14 @@ case "$1" in
 				fi
 				;;
 			*)
-				echo "show help"
+				print_help
 				;;
 			esac
 		else 
 			echo "$ACCESS"
 		fi	
 	else 
-		echo "Show help for -r"
+		print_help
 	fi
 
 	exit 1
