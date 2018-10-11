@@ -136,10 +136,10 @@ print_help () {
 	underlined="\033[4m"
 
 	echo -e "\n${bold}HELP:${normal}\n"
-	echo -e "${bold}cvs -init ${italic}repo_name${normal}${dim} -owner ${italic}user ${normal}: intialize repository"
+	echo -e "${bold}cvs -init ${italic}repo_name${normal}${dim} -owner ${italic}user ${normal}: intialize repository, if owner is not provided its automatically assigned to the \$USER"
 	echo -e "${bold}cvs -list ${normal}: list available repositories"
 	echo -e "${bold}cvs -delete-all ${normal}: delete all repositories"
-	echo -e "${bold}cvs -logs ${normal}: display logs"
+	echo -e "${bold}cvs -logs ${normal}: display root level logs"
 	echo -e "${bold}cvs -r/-repo ${italic}repo_name${normal}${bold} ${underlined}[OPTIONS]${normal} : perform actions on a repository"
 
 	echo -e "\n${bold}OPTIONS:${normal}\n"
